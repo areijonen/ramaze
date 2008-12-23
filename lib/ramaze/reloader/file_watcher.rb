@@ -4,6 +4,7 @@ module Ramaze
       def initialize
         # @files[file_path] = stat
         @files = {}
+        @last = Time.now
       end
 
       # start watching a file for changes
@@ -32,8 +33,11 @@ module Ramaze
       end
 
       # return files changed since last call
-      def changed_files
+      def changed_files interval
+        return [] if interval and @last + interval < Time.now
+
         changed = []
+
         @files.each do |file, stat|
           new_stat = File.stat(file)
           if new_stat.mtime > stat.mtime
@@ -41,12 +45,13 @@ module Ramaze
             @files[file] = new_stat
           end
         end
+        @last = Time.now
         changed
       end
     end
 
     class InotifyFileWatcher
-      POLL_INTERVAL = 2 # seconds
+      POLL_INTERVAL = 1 # seconds
       def initialize
         @watcher = RInotify.new
         @changed = []
@@ -55,7 +60,7 @@ module Ramaze
         @watcher_thread = Thread.new do
           while true
             # don't wait, just ask if events are available
-            if @watcher.wait_for_events(0)
+            if @watcher.wait_for_events(POLL_INTERVAL)
               changed_descriptors = []
               @watcher.each_event do |ev|
                 changed_descriptors << ev.watch_descriptor
@@ -64,7 +69,6 @@ module Ramaze
                 @changed += changed_descriptors.map {|des| @watcher.watch_descriptors[des] }
               end
             end
-            sleep POLL_INTERVAL
           end
         end
       end
@@ -88,7 +92,8 @@ module Ramaze
         true
       end
 
-      def changed_files
+      # parameter not used
+      def changed_files interval
         @mutex.synchronize do
           @tmp = @changed
           @changed = []
