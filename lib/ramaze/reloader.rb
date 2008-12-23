@@ -45,19 +45,37 @@ module Ramaze
       # calling cycle. This allows you to use for example EventMachine for
       # well performing asynchronous cycling.
       :control => nil, # lambda{ cycle },
+
+      # Mechanism to use for detecting file changes.
+      # Currently available are StatFileWatcher and InotifyFileWatcher
+      # default is to use Inotify if available
+      :file_watcher_class =>
+        begin
+          gem 'RInotify', '>=0.9' # is older version ok?
+          require 'rinotify'
+          InotifyFileWatcher
+        rescue Gem::LoadError, LoadError
+          # stat always available
+          StatFileWatcher
+        end
     }
 
     def initialize(app)
       @app = app
       @last = Time.now
       @files = {}
-      @watcher = FileWatcher.new
+      @watcher = OPTIONS[:file_watcher_class].new
       options_reload
     end
 
     def options_reload
       @cooldown, @ignore, @control, @thread =
         OPTIONS.values_at(:cooldown, :ignore, :control, :thread)
+      # if file watcher changed
+      if OPTIONS[:file_watcher_class] != @watcher.class
+        @watcher.close
+        @watcher = OPTIONS[:file_watcher_class].new
+      end
     end
 
     def call(env)
