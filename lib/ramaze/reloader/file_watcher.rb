@@ -54,35 +54,48 @@ module Ramaze
       POLL_INTERVAL = 1 # seconds
       def initialize
         @watcher = RInotify.new
-        @changed = []
+        @changed = Set.new
+        @files = Set.new
         @mutex = Mutex.new
+
         # TODO: define a finalizer to cleanup? -- reloader never calls #close
         @watcher_thread = Thread.new do
           while true
-            # don't wait, just ask if events are available
             if @watcher.wait_for_events(POLL_INTERVAL)
-              changed_descriptors = []
+              changed = Set.new
               @watcher.each_event do |ev|
-                changed_descriptors << ev.watch_descriptor
+                dir = @watcher.watch_descriptors[ev.watch_descriptor]
+                if dir
+                  full_path = File.join(dir, ev.name)
+                  changed << full_path if @files.include? full_path
+                end
               end
-              @mutex.synchronize do
-                @changed += changed_descriptors.map {|des| @watcher.watch_descriptors[des] }
-              end
+              @mutex.synchronize { @changed += changed }
             end
           end
         end
       end
 
       def watch(file)
-        if not @watcher.watch_descriptors.values.include?(file) and File.exist?(file)
-          @mutex.synchronize { @watcher.add_watch(file, RInotify::MODIFY) }
+        if File.exist?(file)
+          dirname = File.dirname(file)
+          # if not already watching
+          if not @watcher.watch_descriptors.values.include?(dirname)
+            @files << file
+            @mutex.synchronize do
+              @watcher.add_watch(File.dirname(file), RInotify::CREATE | RInotify::MOVED_TO | RInotify::CLOSE_WRITE | RInotify::MODIFY)
+            end
+          end
           return true
         end
         false
       end
 
       def remove_watch(file)
-        @mutex.synchronize { @watcher.rm_watch(file) }
+        @files.delete file
+        @mutex.synchronize do
+          @watcher.rm_watch( @watcher.watch_descriptors.find {|k,v| v == file }.first )
+        end rescue nil
         true
       end
 
@@ -96,20 +109,10 @@ module Ramaze
       def changed_files interval
         @mutex.synchronize do
           @tmp = @changed
-          @changed = []
+          @changed = Set.new
         end
-        @tmp.uniq!
         @tmp
       end
-    end
-
-    begin
-      gem 'RInotify', '>=0.9' # is older version ok?
-      require 'rinotify'
-      FileWatcher = InotifyFileWatcher
-    rescue Gem::LoadError, LoadError
-      # stat always available
-      FileWatcher = StatFileWatcher
     end
   end
 end
