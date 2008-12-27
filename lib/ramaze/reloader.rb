@@ -45,8 +45,8 @@ module Ramaze
       :control => nil, # lambda{ cycle },
 
       # Mechanism to use for detecting file changes.
-      # Currently available are StatFileWatcher and InotifyFileWatcher
-      # default is to use Inotify if available
+      # Currently available are Reloader::WatchInotify and Reloader::WatchStat
+      # default is to use WatchInotify if RInotify is installed
       :file_watcher_class =>
 				begin
 					gem 'RInotify', '>=0.9' # is older version ok?
