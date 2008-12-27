@@ -68,10 +68,11 @@ module Ramaze
           directory_descriptor, file = @changed.shift
           directory = @watcher.watch_descriptors[directory_descriptor]
           path = "#{directory}/#{file}"
-          # can't yield yet, could have duplicates
-          files << path if @watched_files.include? path
+          if @watched_files.include?(path) and not files.include?(path)
+            files << path
+            yield path
+          end
         end
-        files.each {|f| yield f }
       end
     end
   end
