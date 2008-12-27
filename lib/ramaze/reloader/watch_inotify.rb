@@ -1,16 +1,5 @@
 module Ramaze
   class Reloader
-    # TODO:
-    #   * There seems to be a problem somewhere that I couldn't identify yet, a
-    #     file has to be modified twice initially to make it show up as
-    #     modified here, subsequent changes work just fine.
-    #     The only workaround I could find right now would be to read/write
-    #     every single file, but that would be unexpected, irresponsible, and
-    #     error-prone.
-    #
-    # NOTE:
-    #   * I have changed from using a Mutex to using a Queue, which uses a
-    #     Mutex internally.
 
     class WatchInotify
       POLL_INTERVAL = 2 # seconds
