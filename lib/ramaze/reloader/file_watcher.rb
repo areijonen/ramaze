@@ -78,10 +78,10 @@ module Ramaze
 
       def watch(file)
         if File.exist?(file)
-          dirname = File.dirname(file)
-          # if not already watching
+          dirname = File.dirname(file)           
+					@files << file
+          # if not already watching the directory
           if not @watcher.watch_descriptors.values.include?(dirname)
-            @files << file
             @mutex.synchronize do
               @watcher.add_watch(File.dirname(file), RInotify::CREATE | RInotify::MOVED_TO | RInotify::CLOSE_WRITE | RInotify::MODIFY)
             end
