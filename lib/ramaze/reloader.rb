@@ -1,8 +1,6 @@
 #          Copyright (c) 2008 Michael Fellinger m.fellinger@gmail.com
 # All files in this distribution are subject to the terms of the Ruby license.
 
-require 'ramaze/reloader/file_watcher'
-
 module Ramaze
 
   # High performant source reloader
@@ -50,15 +48,18 @@ module Ramaze
       # Currently available are StatFileWatcher and InotifyFileWatcher
       # default is to use Inotify if available
       :file_watcher_class =>
-        begin
-          gem 'RInotify', '>=0.9' # is older version ok?
-          require 'rinotify'
-          InotifyFileWatcher
-        rescue Gem::LoadError, LoadError
-          # stat always available
-          StatFileWatcher
-        end
+				begin
+					gem 'RInotify', '>=0.9' # is older version ok?
+					require 'rinotify'
+					require 'ramaze/reloader/watch_inotify'
+					Watcher = WatchInotify
+				rescue LoadError
+					# stat always available
+					require 'ramaze/reloader/watch_stat'
+					Watcher = WatchStat
+				end
     }
+
 
     def initialize(app)
       @app = app
@@ -81,18 +82,15 @@ module Ramaze
     def call(env)
       options_reload
 
-      if @control # use throttling
-        if not @cooldown or Time.now > @last + @cooldown
+      @watcher.call(@cooldown) do
+        if @control
           instance_eval(&@control)
-        end
-      else # delegate throttling to FileWatcher
-        if @thread
+        elsif @thread
           Thread.exclusive { cycle }
         else
           cycle
         end
       end
-      @last = Time.now
 
       @app.call(env)
     end
@@ -100,13 +98,8 @@ module Ramaze
     def cycle
       before_cycle
 
-      rotation do |file|
-        @watcher.watch file
-      end
-
-      @watcher.changed_files(@cooldown).each do |f|
-        safe_load f
-      end
+      rotation{|file| @watcher.watch(file) }
+      @watcher.changed_files{|f| safe_load(f) }
 
       after_cycle
     end
